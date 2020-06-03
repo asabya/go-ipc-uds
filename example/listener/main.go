@@ -12,7 +12,7 @@ func main() {
 		Size:       512,
 		SocketPath: SockPath,
 	}
-	out := uds.Listener(opts)
+	out, ext := uds.Listener(opts)
 	for {
 		data := <-out
 		if data.Error != nil {
@@ -20,5 +20,11 @@ func main() {
 			return
 		}
 		log.Println("Got data : ", data.Data)
+		d := uds.OutMessage{
+			Topic: data.Data,
+			Data:  "My data",
+		}
+		ext <- d
+		log.Println("Sent data : ", d)
 	}
 }

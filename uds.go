@@ -1,7 +1,9 @@
 package uds
 
 import (
+	"encoding/json"
 	"errors"
+	"log"
 	"net"
 )
 
@@ -24,9 +26,15 @@ type Envelop struct {
 	Error error
 }
 
+type OutMessage struct {
+	Topic string
+	Data string
+}
+
 // Listener creates a uds listener
-func Listener(opts ListenerOptions) chan Envelop {
+func Listener(opts ListenerOptions) (chan Envelop, chan OutMessage) {
 	out := make(chan Envelop)
+	external := make(chan OutMessage)
 	r := Envelop{
 		Data: "",
 		Error: nil,
@@ -34,7 +42,7 @@ func Listener(opts ListenerOptions) chan Envelop {
 	if opts.SocketPath == "" {
 		r.Error = errors.New("invalid socket path")
 		out <- r
-		return out
+		return out, external
 	}
 	if opts.Size == 0 {
 		opts.Size = DEFAULT_SIZE
@@ -43,7 +51,7 @@ func Listener(opts ListenerOptions) chan Envelop {
 	if err != nil {
 		r.Error = err
 		out <- r
-		return out
+		return out, external
 	}
 	go func() {
 		defer l.Close()
@@ -53,10 +61,24 @@ func Listener(opts ListenerOptions) chan Envelop {
 				r.Error = err
 				out <- r
 			}
+			go func(c net.Conn) {
+				log.Println("looking for in")
+				for {
+					in := <-external
+					b, _ := json.Marshal(in)
+					_, err = c.Write(b)
+					if err != nil {
+						log.Println("Write error", err)
+						c.Close()
+						return
+					}
+				}
+			}(conn)
 			for {
 				b := make([]byte, opts.Size)
 				n, err := conn.Read(b)
 				if err != nil {
+					log.Println("Read error :" , err)
 					conn.Close()
 					break
 				}
@@ -65,7 +87,7 @@ func Listener(opts ListenerOptions) chan Envelop {
 			}
 		}
 	}()
-	return out
+	return out, external
 }
 
 // Dialer creates a uds dialer
