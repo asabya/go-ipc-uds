@@ -55,12 +55,12 @@ func Listener(opts ListenerOptions) chan Envelop {
 			}
 			for {
 				b := make([]byte, opts.Size)
-				_, err := conn.Read(b)
+				n, err := conn.Read(b)
 				if err != nil {
 					conn.Close()
 					break
 				}
-				r.Data = string(b)
+				r.Data = string(b[:n])
 				out <- r
 			}
 		}
