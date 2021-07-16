@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/Sab94/uds"
+	"github.com/asabya/uds"
 )
 
 func main() {

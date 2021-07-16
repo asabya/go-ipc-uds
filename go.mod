@@ -1,3 +1,3 @@
-module github.com/Sab94/uds
+module github.com/asabya/uds
 
 go 1.14

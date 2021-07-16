@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/Sab94/uds"
+	"context"
+	"github.com/asabya/uds"
 	"log"
 )
 
@@ -12,7 +13,7 @@ func main() {
 		Size:       512,
 		SocketPath: SockPath,
 	}
-	out, ext := uds.Listener(opts)
+	out, ext := uds.Listener(context.Background(), opts)
 	for {
 		data := <-out
 		if data.Error != nil {
