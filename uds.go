@@ -20,7 +20,7 @@ var log = logging.Logger("uds")
 // SocketPath is the location of the `sock` file.
 // Size is the size for byte array
 type ListenerOptions struct {
-	Size uint64
+	Size       uint64
 	SocketPath string
 }
 
@@ -63,7 +63,7 @@ func Listener(ctx context.Context, opts ListenerOptions) (chan string, chan stri
 				b := make([]byte, opts.Size)
 				n, err := conn.Read(b)
 				if err != nil && err != io.EOF {
-					log.Error("Read error :" , err)
+					log.Error("Read error :", err)
 					conn.Close()
 					break
 				}
@@ -75,7 +75,7 @@ func Listener(ctx context.Context, opts ListenerOptions) (chan string, chan stri
 }
 
 // Dialer creates a uds dialer
-func Dialer(opts ListenerOptions) (chan string, chan string ,error) {
+func Dialer(opts ListenerOptions) (chan string, chan string, error) {
 	in := make(chan string)
 	out := make(chan string)
 	if opts.SocketPath == "" {
@@ -98,7 +98,7 @@ func Dialer(opts ListenerOptions) (chan string, chan string ,error) {
 		b := make([]byte, opts.Size)
 		n, err := conn.Read(b)
 		if err != nil && err != io.EOF {
-			log.Error("Read error :" , err)
+			log.Error("Read error :", err)
 			conn.Close()
 			return
 		}
