@@ -4,7 +4,7 @@ unix domain socket implementation in go
 
 # Install
 
-`go get -u github.com/Sab94/uds`
+`go get -u github.com/asabya/go-ipc-uds`
 
 # Examples
 

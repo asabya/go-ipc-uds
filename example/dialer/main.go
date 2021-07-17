@@ -1,13 +1,15 @@
 package main
 
 import (
-	"github.com/asabya/uds"
+	"fmt"
+	"github.com/asabya/go-ipc-uds"
 )
 
 func main() {
-	in, err := uds.Dialer("/tmp/uds.sock")
+	in, out, err := uds.Dialer("/tmp/uds.sock")
 	if err != nil {
 		return
 	}
 	in <- "My message"
+	fmt.Println(<-out)
 }

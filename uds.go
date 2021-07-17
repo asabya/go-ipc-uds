@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net"
+
+	logging "github.com/ipfs/go-log/v2"
 )
 
 const (
 	DefaultSize = 512
 )
+
+var log = logging.Logger("uds")
 
 // ListenerOptions is used to create Listener.
 // SocketPath is the location of the `sock` file.
@@ -21,38 +24,19 @@ type ListenerOptions struct {
 	SocketPath string
 }
 
-// Envelop is used to read data on Listener
-type Envelop struct {
-	Data string
-	Error error
-}
-
-type OutMessage struct {
-	Topic string
-	Data string
-}
-
 // Listener creates a uds listener
-func Listener(ctx context.Context, opts ListenerOptions) (chan Envelop, chan OutMessage) {
-	out := make(chan Envelop)
-	external := make(chan OutMessage)
-	r := Envelop{
-		Data: "",
-		Error: nil,
-	}
+func Listener(ctx context.Context, opts ListenerOptions) (chan string, chan string, error) {
+	out := make(chan string)
+	external := make(chan string)
 	if opts.SocketPath == "" {
-		r.Error = errors.New("invalid socket path")
-		out <- r
-		return out, external
+		return out, external, errors.New("invalid socket path")
 	}
 	if opts.Size == 0 {
 		opts.Size = DefaultSize
 	}
 	l, err := net.Listen("unix", opts.SocketPath)
 	if err != nil {
-		r.Error = err
-		out <- r
-		return out, external
+		return out, external, err
 	}
 	go func() {
 		defer l.Close()
@@ -63,16 +47,15 @@ func Listener(ctx context.Context, opts ListenerOptions) (chan Envelop, chan Out
 			default:
 				conn, err := l.Accept()
 				if err != nil {
-					r.Error = err
-					out <- r
+					log.Error("Listener error", err)
+					return
 				}
 				go func(c net.Conn) {
-					log.Println("looking for in")
 					in := <-external
 					b, _ := json.Marshal(in)
 					_, err = c.Write(b)
 					if err != nil {
-						log.Println("Write error", err)
+						log.Error("Write error", err)
 						c.Close()
 						return
 					}
@@ -80,33 +63,46 @@ func Listener(ctx context.Context, opts ListenerOptions) (chan Envelop, chan Out
 				b := make([]byte, opts.Size)
 				n, err := conn.Read(b)
 				if err != nil && err != io.EOF {
-					log.Println("Read error :" , err)
+					log.Error("Read error :" , err)
 					conn.Close()
 					break
 				}
-				r.Data = string(b[:n])
-				out <- r
+				out <- string(b[:n])
 			}
 		}
 	}()
-	return out, external
+	return out, external, nil
 }
 
 // Dialer creates a uds dialer
-func Dialer(sockPath string) (chan string ,error) {
+func Dialer(opts ListenerOptions) (chan string, chan string ,error) {
 	in := make(chan string)
-	c, err := net.Dial("unix", sockPath)
+	out := make(chan string)
+	if opts.SocketPath == "" {
+		return in, out, errors.New("invalid socket path")
+	}
+	if opts.Size == 0 {
+		opts.Size = DefaultSize
+	}
+	conn, err := net.Dial("unix", opts.SocketPath)
 	if err != nil {
-		return in, err
+		return in, out, err
 	}
 	go func() {
-		defer c.Close()
-		for {
-			_, err := c.Write([]byte(<-in))
-			if err != nil {
-				return
-			}
+		defer conn.Close()
+		_, err := conn.Write([]byte(<-in))
+		if err != nil {
+			log.Error(err)
+			return
 		}
+		b := make([]byte, opts.Size)
+		n, err := conn.Read(b)
+		if err != nil && err != io.EOF {
+			log.Error("Read error :" , err)
+			conn.Close()
+			return
+		}
+		out <- string(b[:n])
 	}()
-	return in, nil
+	return in, out, nil
 }
