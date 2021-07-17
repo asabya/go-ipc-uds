@@ -16,16 +16,16 @@ const (
 
 var log = logging.Logger("uds")
 
-// ListenerOptions is used to create Listener.
+// Options is used to create Listener/Dialer.
 // SocketPath is the location of the `sock` file.
 // Size is the size for byte array
-type ListenerOptions struct {
+type Options struct {
 	Size       uint64
 	SocketPath string
 }
 
 // Listener creates a uds listener
-func Listener(ctx context.Context, opts ListenerOptions) (chan string, chan string, error) {
+func Listener(ctx context.Context, opts Options) (chan string, chan string, error) {
 	out := make(chan string)
 	external := make(chan string)
 	if opts.SocketPath == "" {
@@ -75,7 +75,7 @@ func Listener(ctx context.Context, opts ListenerOptions) (chan string, chan stri
 }
 
 // Dialer creates a uds dialer
-func Dialer(opts ListenerOptions) (chan string, chan string, error) {
+func Dialer(opts Options) (chan string, chan string, error) {
 	in := make(chan string)
 	out := make(chan string)
 	if opts.SocketPath == "" {
