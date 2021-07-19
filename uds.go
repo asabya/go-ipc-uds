@@ -136,7 +136,7 @@ func Dialer(opts Options) (Read func() (string, error), Write func(st string) er
 	return
 }
 
-func IsIPCListing(socketPath string) bool {
+func IsIPCListening(socketPath string) bool {
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		return false
