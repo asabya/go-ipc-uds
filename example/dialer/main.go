@@ -2,14 +2,24 @@ package main
 
 import (
 	"fmt"
-	"github.com/asabya/go-ipc-uds"
+
+	uds "github.com/asabya/go-ipc-uds"
 )
 
 func main() {
-	in, out, err := uds.Dialer("/tmp/uds.sock")
+	opts := uds.Options{
+		Size:       512,
+		SocketPath: "/tmp/uds.sock",
+	}
+	r, w, c, err := uds.Dialer(opts)
 	if err != nil {
 		return
 	}
-	in <- "My message"
-	fmt.Println(<-out)
+	defer c()
+
+	w("asd")
+	fmt.Println(r())
+
+	w("qwe")
+	fmt.Println(r())
 }

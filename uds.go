@@ -2,7 +2,6 @@ package uds
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -50,24 +49,42 @@ func Listener(ctx context.Context, opts Options) (chan string, chan string, erro
 					log.Error("Listener error", err)
 					return
 				}
-				go func(c net.Conn) {
-					in := <-external
-					b, _ := json.Marshal(in)
-					_, err = c.Write(b)
-					if err != nil {
-						log.Error("Write error", err)
-						c.Close()
-						return
+				go func(conn net.Conn) {
+					dontWait := make(chan struct{})
+					go func(c net.Conn) {
+						for {
+							select {
+							case <-dontWait:
+								c.Close()
+								return
+							case in := <-external:
+								_, err = c.Write([]byte(in))
+								if err != nil {
+									log.Error("Write error", err)
+									c.Close()
+									return
+								}
+							}
+						}
+					}(conn)
+					for {
+						b := make([]byte, opts.Size)
+						n, err := conn.Read(b)
+						if err != nil {
+							if err == io.EOF {
+								dontWait <- struct{}{}
+								return
+							} else {
+								log.Error("Read error :", err)
+								conn.Close()
+								return
+							}
+						}
+						if n > 0 {
+							out <- string(b[:n])
+						}
 					}
 				}(conn)
-				b := make([]byte, opts.Size)
-				n, err := conn.Read(b)
-				if err != nil && err != io.EOF {
-					log.Error("Read error :", err)
-					conn.Close()
-					break
-				}
-				out <- string(b[:n])
 			}
 		}
 	}()
@@ -75,34 +92,55 @@ func Listener(ctx context.Context, opts Options) (chan string, chan string, erro
 }
 
 // Dialer creates a uds dialer
-func Dialer(opts Options) (chan string, chan string, error) {
-	in := make(chan string)
-	out := make(chan string)
+func Dialer(opts Options) (Read func() (string, error), Write func(st string) error, Close func() error, err error) {
+	Close = func() error {
+		return nil
+	}
+	Write = func(st string) error {
+		return nil
+	}
+	Read = func() (string, error) {
+		return "", nil
+	}
 	if opts.SocketPath == "" {
-		return in, out, errors.New("invalid socket path")
+		return Read, Write, Close, errors.New("invalid socket path")
 	}
 	if opts.Size == 0 {
 		opts.Size = DefaultSize
 	}
 	conn, err := net.Dial("unix", opts.SocketPath)
 	if err != nil {
-		return in, out, err
+		return Read, Write, Close, err
 	}
-	go func() {
-		defer conn.Close()
-		_, err := conn.Write([]byte(<-in))
+	Close = func() error {
+		return conn.Close()
+	}
+	Write = func(st string) error {
+		_, err := conn.Write([]byte(st))
 		if err != nil {
 			log.Error(err)
-			return
+			return err
 		}
+		return nil
+	}
+	Read = func() (string, error) {
 		b := make([]byte, opts.Size)
 		n, err := conn.Read(b)
 		if err != nil && err != io.EOF {
 			log.Error("Read error :", err)
 			conn.Close()
-			return
+			return "", err
 		}
-		out <- string(b[:n])
-	}()
-	return in, out, nil
+		return string(b[:n]), nil
+	}
+	return
+}
+
+func IsIPCListing(socketPath string) bool {
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	return true
 }

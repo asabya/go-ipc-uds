@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
-	"github.com/asabya/go-ipc-uds"
 	"log"
+
+	uds "github.com/asabya/go-ipc-uds"
 )
 
 var SockPath = "/tmp/uds.sock"
 
 func main() {
-	opts := uds.ListenerOptions{
+	opts := uds.Options{
 		Size:       512,
 		SocketPath: SockPath,
 	}
