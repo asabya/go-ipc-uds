@@ -2,30 +2,36 @@ package main
 
 import (
 	"context"
-	"github.com/asabya/uds"
 	"log"
+
+	uds "github.com/asabya/go-ipc-uds"
 )
 
 var SockPath = "/tmp/uds.sock"
 
 func main() {
-	opts := uds.ListenerOptions{
+	opts := uds.Options{
 		Size:       512,
 		SocketPath: SockPath,
 	}
-	out, ext := uds.Listener(context.Background(), opts)
+	in, err := uds.Listener(context.Background(), opts)
+	if err != nil {
+		log.Fatal(err)
+	}
 	for {
-		data := <-out
-		if data.Error != nil {
-			log.Println("Got Error :", data.Error.Error())
-			return
-		}
-		log.Println("Got data : ", data.Data)
-		d := uds.OutMessage{
-			Topic: data.Data,
-			Data:  "My data",
-		}
-		ext <- d
-		log.Println("Sent data : ", d)
+		conn := <-in
+		go func(conn *uds.Client) {
+			for {
+				d, err := conn.Read()
+				if err != nil {
+					return
+				}
+				r := string(d) + "return"
+				err = conn.Write([]byte(r))
+				if err != nil {
+					return
+				}
+			}
+		}(conn)
 	}
 }
