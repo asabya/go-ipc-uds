@@ -14,15 +14,24 @@ func main() {
 		Size:       512,
 		SocketPath: SockPath,
 	}
-	out, ext, err := uds.Listener(context.Background(), opts)
+	in, err := uds.Listener(context.Background(), opts)
 	if err != nil {
 		log.Fatal(err)
 	}
 	for {
-		data := <-out
-		log.Println("Got data : ", data)
-		d := "My data"
-		ext <- d
-		log.Println("Sent data : ", d)
+		conn := <-in
+		go func(conn *uds.Client) {
+			for {
+				d, err := conn.Read()
+				if err != nil {
+					return
+				}
+				r := string(d) + "return"
+				err = conn.Write([]byte(r))
+				if err != nil {
+					return
+				}
+			}
+		}(conn)
 	}
 }

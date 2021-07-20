@@ -17,9 +17,9 @@ func main() {
 	}
 	defer c()
 
-	w("asd")
+	w("asd 1")
 	fmt.Println(r())
 
-	w("qwe")
+	w("qwe 1")
 	fmt.Println(r())
 }

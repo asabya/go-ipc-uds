@@ -23,19 +23,51 @@ type Options struct {
 	SocketPath string
 }
 
+type Client struct {
+	Conn net.Conn
+	Size uint64
+}
+
+func (c *Client) Read() ([]byte, error) {
+	b := make([]byte, c.Size)
+	n, err := c.Conn.Read(b)
+	if err != nil {
+		if err == io.EOF {
+			return []byte{}, nil
+		} else {
+			log.Error("Read error :", err)
+			c.Conn.Close()
+			return nil, err
+		}
+	}
+	return b[:n], nil
+}
+
+func (c *Client) Write(d []byte) error {
+	_, err := c.Conn.Write(d)
+	if err != nil {
+		c.Conn.Close()
+		return err
+	}
+	return nil
+}
+
+func (c *Client) Close() error {
+	return c.Conn.Close()
+}
+
 // Listener creates a uds listener
-func Listener(ctx context.Context, opts Options) (chan string, chan string, error) {
-	out := make(chan string)
-	external := make(chan string)
+func Listener(ctx context.Context, opts Options) (chan *Client, error) {
+	in := make(chan *Client)
 	if opts.SocketPath == "" {
-		return out, external, errors.New("invalid socket path")
+		return in, errors.New("invalid socket path")
 	}
 	if opts.Size == 0 {
 		opts.Size = DefaultSize
 	}
 	l, err := net.Listen("unix", opts.SocketPath)
 	if err != nil {
-		return out, external, err
+		return in, err
 	}
 	go func() {
 		defer l.Close()
@@ -49,46 +81,14 @@ func Listener(ctx context.Context, opts Options) (chan string, chan string, erro
 					log.Error("Listener error", err)
 					return
 				}
-				go func(conn net.Conn) {
-					dontWait := make(chan struct{})
-					go func(c net.Conn) {
-						for {
-							select {
-							case <-dontWait:
-								c.Close()
-								return
-							case in := <-external:
-								_, err = c.Write([]byte(in))
-								if err != nil {
-									log.Error("Write error", err)
-									c.Close()
-									return
-								}
-							}
-						}
-					}(conn)
-					for {
-						b := make([]byte, opts.Size)
-						n, err := conn.Read(b)
-						if err != nil {
-							if err == io.EOF {
-								dontWait <- struct{}{}
-								return
-							} else {
-								log.Error("Read error :", err)
-								conn.Close()
-								return
-							}
-						}
-						if n > 0 {
-							out <- string(b[:n])
-						}
-					}
-				}(conn)
+				in <- &Client{
+					Conn: conn,
+					Size: opts.Size,
+				}
 			}
 		}
 	}()
-	return out, external, nil
+	return in, nil
 }
 
 // Dialer creates a uds dialer
