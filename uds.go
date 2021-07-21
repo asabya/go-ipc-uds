@@ -3,14 +3,11 @@ package uds
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 
 	logging "github.com/ipfs/go-log/v2"
-)
-
-const (
-	DefaultSize = 512
 )
 
 var log = logging.Logger("uds")
@@ -29,18 +26,46 @@ type Client struct {
 }
 
 func (c *Client) Read() ([]byte, error) {
-	b := make([]byte, c.Size)
-	n, err := c.Conn.Read(b)
-	if err != nil {
-		if err == io.EOF {
-			return []byte{}, nil
-		} else {
-			log.Error("Read error :", err)
-			c.Conn.Close()
-			return nil, err
+	var b []byte
+	if c.Size == 0 {
+		// make a temporary bytes var to read from the connection
+		tmp := make([]byte, 1024)
+		// make 0 length data bytes (since we'll be appending)
+		data := make([]byte, 0)
+		// keep track of full length read
+		length := 0
+		for {
+			n, err := c.Conn.Read(tmp)
+			if err != nil {
+				if err != io.EOF {
+					log.Error("Read error :", err)
+					c.Conn.Close()
+				}
+				break
+			}
+			data = append(data, tmp[:n]...)
+			length += n
+			if n < 1024 {
+				break
+			}
 		}
+		return data[:length], nil
+	} else {
+		b = make([]byte, c.Size)
+		n, err := c.Conn.Read(b)
+		fmt.Println(n, err)
+		if err != nil {
+			if err == io.EOF {
+				return []byte{}, nil
+			} else {
+				log.Error("Read error :", err)
+				c.Conn.Close()
+				return nil, err
+			}
+		}
+		return b[:n], nil
 	}
-	return b[:n], nil
+
 }
 
 func (c *Client) Write(d []byte) error {
@@ -61,9 +86,6 @@ func Listener(ctx context.Context, opts Options) (chan *Client, error) {
 	in := make(chan *Client)
 	if opts.SocketPath == "" {
 		return in, errors.New("invalid socket path")
-	}
-	if opts.Size == 0 {
-		opts.Size = DefaultSize
 	}
 	l, err := net.Listen("unix", opts.SocketPath)
 	if err != nil {
@@ -105,9 +127,6 @@ func Dialer(opts Options) (Read func() (string, error), Write func(st string) er
 	if opts.SocketPath == "" {
 		return Read, Write, Close, errors.New("invalid socket path")
 	}
-	if opts.Size == 0 {
-		opts.Size = DefaultSize
-	}
 	conn, err := net.Dial("unix", opts.SocketPath)
 	if err != nil {
 		return Read, Write, Close, err
@@ -124,14 +143,41 @@ func Dialer(opts Options) (Read func() (string, error), Write func(st string) er
 		return nil
 	}
 	Read = func() (string, error) {
-		b := make([]byte, opts.Size)
-		n, err := conn.Read(b)
-		if err != nil && err != io.EOF {
-			log.Error("Read error :", err)
-			conn.Close()
-			return "", err
+		log.Debug("dialer read")
+		var b []byte
+		if opts.Size == 0 {
+			// make a temporary bytes var to read from the connection
+			tmp := make([]byte, 1024)
+			// make 0 length data bytes (since we'll be appending)
+			data := make([]byte, 0)
+			// keep track of full length read
+			length := 0
+			for {
+				n, err := conn.Read(tmp)
+				if err != nil {
+					if err != io.EOF {
+						log.Error("Read error :", err)
+						conn.Close()
+					}
+					break
+				}
+				data = append(data, tmp[:n]...)
+				length += n
+				if n < 1024 {
+					break
+				}
+			}
+			return string(data[:length]), nil
+		} else {
+			b = make([]byte, opts.Size)
+			n, err := conn.Read(b)
+			if err != nil && err != io.EOF {
+				log.Error("Read error :", err)
+				conn.Close()
+				return "", err
+			}
+			return string(b[:n]), nil
 		}
-		return string(b[:n]), nil
 	}
 	return
 }

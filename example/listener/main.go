@@ -11,7 +11,7 @@ var SockPath = "/tmp/uds.sock"
 
 func main() {
 	opts := uds.Options{
-		Size:       512,
+		Size:       0,
 		SocketPath: SockPath,
 	}
 	in, err := uds.Listener(context.Background(), opts)
