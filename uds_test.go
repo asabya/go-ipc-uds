@@ -113,7 +113,7 @@ func TestDialersWithLimit(t *testing.T) {
 						}
 					}
 				}(conn)
-			case <-time.After(time.Second * 5):
+			case <-time.After(time.Minute * 2):
 				fmt.Println("processed ", count)
 				t.Fatal("lister could not process all dialers")
 			}
