@@ -8,7 +8,7 @@ import (
 
 func main() {
 	opts := uds.Options{
-		Size:       512,
+		Size:       0,
 		SocketPath: "/tmp/uds.sock",
 	}
 	r, w, c, err := uds.Dialer(opts)
@@ -19,7 +19,6 @@ func main() {
 
 	w("asd 1")
 	fmt.Println(r())
-
 	w("qwe 1")
 	fmt.Println(r())
 }
