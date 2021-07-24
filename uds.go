@@ -3,7 +3,6 @@ package uds
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 
@@ -53,7 +52,6 @@ func (c *Client) Read() ([]byte, error) {
 	} else {
 		b = make([]byte, c.Size)
 		n, err := c.Conn.Read(b)
-		fmt.Println(n, err)
 		if err != nil {
 			if err == io.EOF {
 				return []byte{}, nil
