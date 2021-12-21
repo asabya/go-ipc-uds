@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"net"
-
-	logging "github.com/ipfs/go-log/v2"
 )
 
-var log = logging.Logger("uds")
+type noLogger struct{}
+
+func (noLogger) Debug(args ...interface{}) {}
+
+func (noLogger) Error(args ...interface{}) {}
 
 // Options is used to create Listener/Dialer.
 // SocketPath is the location of the `sock` file.
@@ -17,11 +19,14 @@ var log = logging.Logger("uds")
 type Options struct {
 	Size       uint64
 	SocketPath string
+	Logger     Logger
 }
 
 type Client struct {
 	Conn net.Conn
 	Size uint64
+
+	logger Logger
 }
 
 func (c *Client) Read() ([]byte, error) {
@@ -37,7 +42,7 @@ func (c *Client) Read() ([]byte, error) {
 			n, err := c.Conn.Read(tmp)
 			if err != nil {
 				if err != io.EOF {
-					log.Error("Read error :", err)
+					c.logger.Error("Read error :", err)
 					c.Conn.Close()
 				}
 				break
@@ -56,7 +61,7 @@ func (c *Client) Read() ([]byte, error) {
 			if err == io.EOF {
 				return []byte{}, nil
 			} else {
-				log.Error("Read error :", err)
+				c.logger.Error("Read error :", err)
 				c.Conn.Close()
 				return nil, err
 			}
@@ -81,6 +86,9 @@ func (c *Client) Close() error {
 
 // Listener creates a uds listener
 func Listener(ctx context.Context, opts Options) (chan *Client, error) {
+	if opts.Logger == nil {
+		opts.Logger = &noLogger{}
+	}
 	in := make(chan *Client)
 	if opts.SocketPath == "" {
 		return in, errors.New("invalid socket path")
@@ -98,12 +106,13 @@ func Listener(ctx context.Context, opts Options) (chan *Client, error) {
 			default:
 				conn, err := l.Accept()
 				if err != nil {
-					log.Error("Listener error", err)
+					opts.Logger.Error("Listener error", err)
 					return
 				}
 				in <- &Client{
-					Conn: conn,
-					Size: opts.Size,
+					Conn:   conn,
+					Size:   opts.Size,
+					logger: opts.Logger,
 				}
 			}
 		}
@@ -113,6 +122,9 @@ func Listener(ctx context.Context, opts Options) (chan *Client, error) {
 
 // Dialer creates a uds dialer
 func Dialer(opts Options) (Read func() (string, error), Write func(st string) error, Close func() error, err error) {
+	if opts.Logger == nil {
+		opts.Logger = &noLogger{}
+	}
 	Close = func() error {
 		return nil
 	}
@@ -135,13 +147,13 @@ func Dialer(opts Options) (Read func() (string, error), Write func(st string) er
 	Write = func(st string) error {
 		_, err := conn.Write([]byte(st))
 		if err != nil {
-			log.Error(err)
+			opts.Logger.Error(err)
 			return err
 		}
 		return nil
 	}
 	Read = func() (string, error) {
-		log.Debug("dialer read")
+		opts.Logger.Debug("dialer read")
 		var b []byte
 		if opts.Size == 0 {
 			// make a temporary bytes var to read from the connection
@@ -154,7 +166,7 @@ func Dialer(opts Options) (Read func() (string, error), Write func(st string) er
 				n, err := conn.Read(tmp)
 				if err != nil {
 					if err != io.EOF {
-						log.Error("Read error :", err)
+						opts.Logger.Error("Read error :", err)
 						conn.Close()
 					}
 					break
@@ -170,7 +182,7 @@ func Dialer(opts Options) (Read func() (string, error), Write func(st string) er
 			b = make([]byte, opts.Size)
 			n, err := conn.Read(b)
 			if err != nil && err != io.EOF {
-				log.Error("Read error :", err)
+				opts.Logger.Error("Read error :", err)
 				conn.Close()
 				return "", err
 			}
