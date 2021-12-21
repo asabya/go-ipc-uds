@@ -3,6 +3,7 @@ package uds
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"testing"
@@ -11,12 +12,21 @@ import (
 
 const sockPath = "./testing.sock"
 
+type mockLogging struct{}
+
+func (mockLogging) Debug(args ...interface{}) {
+	log.Println(args...)
+}
+
+func (mockLogging) Error(args ...interface{}) {
+	log.Println(args...)
+}
+
 func rmSockFile() error {
 	_, err := os.Stat(sockPath)
 	if !os.IsNotExist(err) {
 		err := os.Remove(sockPath)
 		if err != nil {
-			log.Error(err)
 			return err
 		}
 		return nil
@@ -25,7 +35,6 @@ func rmSockFile() error {
 		return nil
 	}
 	if err != nil {
-		log.Error(err)
 		return err
 	}
 	return nil
@@ -89,6 +98,7 @@ func TestDialersWithLimit(t *testing.T) {
 	opts := Options{
 		Size:       100,
 		SocketPath: sockPath,
+		Logger:     mockLogging{},
 	}
 	in, err := Listener(context.Background(), opts)
 	if err != nil {
@@ -134,7 +144,7 @@ func TestDialersWithLimit(t *testing.T) {
 				w(msg)
 				res, err := r()
 				if err != nil {
-					log.Error("Read error ", err)
+					opts.Logger.Error("Read error ", err)
 				}
 				if res != msg+"return" {
 					t.Fatalf("Got %s instread of %sreturn", res, msg)
@@ -153,6 +163,7 @@ func TestDialersWithoutLimit(t *testing.T) {
 	opts := Options{
 		Size:       0,
 		SocketPath: sockPath,
+		Logger:     mockLogging{},
 	}
 	in, err := Listener(context.Background(), opts)
 	if err != nil {
@@ -198,7 +209,7 @@ func TestDialersWithoutLimit(t *testing.T) {
 				w(msg)
 				res, err := r()
 				if err != nil {
-					log.Error("Read error ", err)
+					opts.Logger.Error("Read error ", err)
 				}
 				if res != msg+"return" {
 					t.Fatalf("Got %s instread of %sreturn", res, msg)
